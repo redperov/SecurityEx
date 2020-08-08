@@ -1,5 +1,5 @@
 # Type of work mode
-from src import vectors
+from src.myEncryption import vectors
 
 # constants
 KEY_SIZE = 8
@@ -21,8 +21,8 @@ class DES:
             raise ValueError("Illegal IV size")
 
         # Variable initialisation
-        self.L = []
-        self.R = []
+        self.left = []
+        self.right = []
         self.Kn = [[0] * 48] * 16  # 16 48-bit keys (K1 - K16)
         self.final = []
 
@@ -37,7 +37,7 @@ class DES:
         """
         Creates 16 sub-keys from K1...K16 using the initial key
         """
-        key = self._permute(vectors.pc1, self._string_to_bitlist(self._key()))
+        key = self._permute(vectors.pc1, self._string_to_bitlist(self._key))
 
         # Split the key into left and right sections
         self.left = key[:28]
@@ -84,7 +84,7 @@ class DES:
             tempR = self.right[:]
 
             # Permutate R[i - 1] to start creating R[i]
-            self.R = self.__permutate(vectors.expansion_table, self.right)
+            self.right = self._permute(vectors.expansion_table, self.right)
 
             # Exclusive or R[i - 1] with K[i], create B[1] to B[8] whilst here
             self.right = list(map(lambda x, y: x ^ y, self.right, self.Kn[iteration]))
@@ -122,7 +122,7 @@ class DES:
                 j += 1
 
             # Permutate the concatination of B[1] to B[8] (Bn)
-            self.right = self._permutate(vectors.p, Bn)
+            self.right = self._permute(vectors.p, Bn)
 
             # Xor with L[i - 1]
             self.right = list(map(lambda x, y: x ^ y, self.right, self.left))
@@ -139,7 +139,7 @@ class DES:
             iteration += iteration_adjustment
 
         # Final permutation of R[16]L[16]
-        self.final = self._permutate(vectors.fp, self.right + self.left)
+        self.final = self._permute(vectors.fp, self.right + self.left)
         return self.final
 
     def crypt(self, data, crypt_type):
@@ -192,7 +192,7 @@ class DES:
 
         return bytes.fromhex('').join(result)
 
-    def encrypt(self, data, pad=None, padmode=None):
+    def encrypt(self, data, pad=None):
         """encrypt(data, [pad], [padmode]) -> bytes
 
         data : Bytes to be encrypted
@@ -205,10 +205,10 @@ class DES:
         the padmode is set to PAD_PKCS5, as bytes will then added to
         ensure the be padded data is a multiple of 8 bytes.
         """
-        data = self._pad_data(data, pad, padmode)
+        data = self._pad_data(data, pad)
         return self.crypt(data, ENCRYPT)
 
-    def decrypt(self, data, pad=None, padmode=None):
+    def decrypt(self, data, pad=None):
         """decrypt(data, [pad], [padmode]) -> bytes
 
         data : Bytes to be decrypted
@@ -224,7 +224,7 @@ class DES:
         padding end markers will be removed from the data after decrypting.
         """
         data = self.crypt(data, DECRYPT)
-        return self._remove_padding(data, pad, padmode)
+        return self._remove_padding(data, pad)
 
     def _permute(self, table, block):
         return list(map(lambda x: block[x], table))
@@ -283,7 +283,7 @@ class DES:
         # TODO what does it do?
         if not pad:
             # Get the default padding.
-            pad = self.getPadding()
+            pad = self._padding
 
         if pad:
             data = data[:-self.block_size] + \
