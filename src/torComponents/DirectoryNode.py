@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import sys
 from flask_caching import Cache
 
 # config = {
@@ -15,6 +16,14 @@ app = Flask(__name__)
 # # Create a nodes list
 # cache.set("nodes", [])
 _nodes = []
+
+
+def main():
+    if len(sys.argv) != 3:
+        raise ValueError("hostname and port")
+    hostname = sys.argv[1]
+    port = sys.argv[2]
+    app.run(host=hostname, port=port)
 
 
 @app.route("/addNode", methods=["POST"])
@@ -45,4 +54,4 @@ def _is_valid_node(node):
 
 
 if __name__ == "__main__":
-    app.run()
+    main()

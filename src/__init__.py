@@ -1,6 +1,7 @@
 import src.OtherDES as encryption
 import src.myEncryption.DES as my_encryption
 
+# TODO remove that
 
 def original_des():
     data = b"Please encrypt my data"
