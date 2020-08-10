@@ -13,6 +13,7 @@ class DES:
         self._iv = iv
         self._padding = pad
 
+        # TODO make sure the key is represented in bytes (check what happens if it's not)
         # Validation checks
         if len(key) != KEY_SIZE:
             raise ValueError("Key must be of size 8 bytes")

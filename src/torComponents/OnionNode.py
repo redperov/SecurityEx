@@ -75,20 +75,19 @@ def key_share():
         return jsonify(success=False)
     diffie_hellman = DiffieHellman()
     other_public_key = request_data["publicKey"]
-    # source = request_data["source"]
-    # destination = request_data["destination"]
+    connection_id = request_data["connectionId"]
+    source_uri = request.host_url
 
     # Get the current node's public key to send to the other side
     current_public_key = diffie_hellman.get_public_key()
 
     # Create the shared key
-    shared_key = diffie_hellman.generate_shared_key(other_public_key)
+    encryption_algorithm, shared_key = diffie_hellman.generate_shared_key(other_public_key)
 
-    # new_route = {"source": source, "destination": destination, "shared_key": shared_key}
-    # TODO handle a case of race condition?
-    # routes = cache.get("routes")
-    # _routes.append(new_route)
-    # cache.set("routes", routes)
+    # Create a new route between the request's source and the current node
+    route = {"source": source_uri, "connectionId": connection_id,
+             "encryptionAlgorithm": encryption_algorithm, "sharedKey": shared_key}
+    _routes.append(route)
 
     return {"publicKey": current_public_key}
 
@@ -100,12 +99,43 @@ def remove_route():
 
 @app.route("/relay", methods=["POST"])
 def accept_relay():
-    return None
+    request_data = request.get_json()
+
+    if not _is_valid_relay_request(request_data):
+        return jsonify(success=False)
+    if _is_route_exists(request_data["connectionId"]):
+        response = None # TODO implement reverse send
+    else: # New route creation request
+        response = _pass_message(request_data)
+
+    return response
 
 
 def _is_valid_key_sharing_request(request_data):
-    return request_data and request_data["publicKey"]
+    return request_data and request_data["publicKey"] and request_data["connectionId"]
 
+
+def _is_valid_relay_request(request_data):
+    return request_data and request_data["message"]
+
+
+def _is_route_exists(connection_id):
+    for route in _routes:
+        if route["connectionId"] == connection_id:
+            return True
+    return False
+
+
+def _pass_message(request_data):
+    connection_id = request_data["connectionId"]
+    corresponding_route = None
+    for route in _routes:
+        if route["connectionId"] == connection_id:
+            corresponding_route = request_data
+    print()
+    # TODO the above is wrong,
+    #  now the node needs to decrypt a layer but to do that it needs the shared key
+    #  which was created in the session before, check where it was saved
 
 if __name__ == "__main__":
     main()

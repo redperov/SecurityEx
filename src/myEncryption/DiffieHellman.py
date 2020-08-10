@@ -2,6 +2,8 @@ import binascii
 import hashlib
 import os
 
+from src.myEncryption.kdf import perform_kdf
+
 
 class DiffieHellman:
     def __init__(self):
@@ -27,4 +29,7 @@ class DiffieHellman:
         self.shared_key = pow(other_public_key, self._private_key, self.prime)
 
         # TODO why is the shared key hashed?
-        return hashlib.sha256(str(self.shared_key)).hexdigest()
+        # return hashlib.sha256(str(self.shared_key)).hexdigest()
+
+        # TODO make sure it returns bytes
+        return perform_kdf(self.shared_key)

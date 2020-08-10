@@ -4,6 +4,7 @@ import sys
 import random
 
 from src.myEncryption.DiffieHellman import DiffieHellman
+from src.torComponents.onionUtils import encrypt_data, send_request, generate_unique_id
 
 app = Flask(__name__)
 _connection = {}
@@ -43,6 +44,8 @@ def hide_request():
     path = _choose_path(NUM_OF_NODES_IN_PATH)
     _create_shared_keys(path)
     onion_message = _create_onion(path, destination_uri)
+    response = _send_hidden_request(onion_message, path[0])
+    return response
 
 
 def _is_valid_args(args):
@@ -77,7 +80,8 @@ def _create_shared_keys(nodes):
     current_public_key = diffie_hellman.get_public_key()
 
     for node in nodes:
-        shared_key = _create_shared_key(current_public_key, node)
+        encryption_algorithm, shared_key = _create_shared_key(current_public_key, node)
+        node["encryptionAlgorithm"] = encryption_algorithm
         node["shared_key"] = shared_key
     print("Finished key sharing")
 
@@ -100,18 +104,32 @@ def _create_shared_key(source_public_key, destination):
     return shared_key
 
 
-def _create_onion(path, message):
-    onion = None
+def _create_onion(path, destination, message):
+    raw_onion = {"message": message, "nextDestination": destination}
 
+    for i in range(path[:-1]):
+        raw_onion = {"message": raw_onion, "nextDestination": path[-(i+1)]}
+
+    # TODO go in reverse, and add the final message to the final node and go back to create a raw onion
+    # TODO go in noraml order and encrypt the previous raw onion
     # Encrypt the message according to the length of the path
     for node in path:
-        onion = _add_layer(message, node["shared_key"])
+        # Adds a layer to the onion
+        onion_message = {"message": onion, "nextDestination": destination}
+        onion = encrypt_data(message, node["shared_key"])
 
     return onion
 
 
-def _add_layer(message, encryption_key):
-    return None
+def _send_hidden_request(onion_message, guard_node):
+    hostname = guard_node["hostname"]
+    port = guard_node["port"]
+    destination_uri = str.format("http://{0}:{0}/relay", hostname, port)
+    connection_id = generate_unique_id()
+    message = {"message": onion_message, "connectionId": connection_id}
+    response = send_request(destination_uri, message)
+
+    return response
 
 
 if __name__ == "__main__":
