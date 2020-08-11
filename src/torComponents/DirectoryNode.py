@@ -50,7 +50,7 @@ def get_all_nodes():
 
 
 def _is_valid_node(node):
-    return node and node["name"] and node["hostname"] and node["port"]
+    return node and ("name" in node) and ("hostname" in node) and ("port" in node)
 
 
 if __name__ == "__main__":

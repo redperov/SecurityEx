@@ -18,9 +18,14 @@ def encrypt_data(data, encryption_key):
     return des, encrypted_data
 
 
-def decrypt_data(encrypted_data, encryption_algorithm, decryption_key):
-    return encryption_algorithm.decrypt(encrypted_data)
+# TODO if the shared key not needed, remove it from the places that don't use it,
+# TODO or modify the algorithm to accept it as input
+def decrypt_data(encrypted_data, decryption_key):
+    des = my_encryption.DES(decryption_key, b"\0\0\0\0\0\0\0\0", pad=b"$")
+    decrypted_data = des.decrypt(encrypted_data)
+    print("Decrypted: %r" % decrypted_data)
 
+    return decrypted_data
 
 
 def generate_unique_id():
@@ -28,5 +33,5 @@ def generate_unique_id():
 
 
 def send_request(destination_uri, message):
-    response = requests.post(destination_uri, message).json()
+    response = requests.post(destination_uri, json=message).json()
     return response

@@ -10,6 +10,8 @@ from src.myEncryption.DiffieHellman import DiffieHellman
 #     "CACHE_TYPE": "simple",  # Flask-Caching related configs
 #     "CACHE_DEFAULT_TIMEOUT": 300
 # }
+from src.torComponents.onionUtils import decrypt_data, generate_unique_id, send_request
+
 app = Flask(__name__)
 
 # # Tell Flask to use the above defined config
@@ -19,6 +21,7 @@ app = Flask(__name__)
 # # Create a routes list
 # cache.set("routes", [])
 _routes = []
+_shared_keys = []
 _connection = {}
 _directory_node = {}
 
@@ -75,19 +78,19 @@ def key_share():
         return jsonify(success=False)
     diffie_hellman = DiffieHellman()
     other_public_key = request_data["publicKey"]
-    connection_id = request_data["connectionId"]
+    # connection_id = request_data["connectionId"]
     source_uri = request.host_url
 
     # Get the current node's public key to send to the other side
     current_public_key = diffie_hellman.get_public_key()
 
     # Create the shared key
-    encryption_algorithm, shared_key = diffie_hellman.generate_shared_key(other_public_key)
+    shared_key = diffie_hellman.generate_shared_key(other_public_key)
 
     # Create a new route between the request's source and the current node
-    route = {"source": source_uri, "connectionId": connection_id,
-             "encryptionAlgorithm": encryption_algorithm, "sharedKey": shared_key}
-    _routes.append(route)
+    shared_key = {"source": source_uri,  # "keyId": key_id,
+                  "sharedKey": shared_key}
+    _shared_keys.append(shared_key)
 
     return {"publicKey": current_public_key}
 
@@ -104,19 +107,19 @@ def accept_relay():
     if not _is_valid_relay_request(request_data):
         return jsonify(success=False)
     if _is_route_exists(request_data["connectionId"]):
-        response = None # TODO implement reverse send
-    else: # New route creation request
-        response = _pass_message(request_data)
+        response = None  # TODO implement reverse send
+    else:  # New route creation request
+        response = _pass_message(request)
 
     return response
 
 
 def _is_valid_key_sharing_request(request_data):
-    return request_data and request_data["publicKey"] and request_data["connectionId"]
+    return request_data and ("publicKey" in request_data)
 
 
 def _is_valid_relay_request(request_data):
-    return request_data and request_data["message"]
+    return request_data and ("message" in request_data)
 
 
 def _is_route_exists(connection_id):
@@ -127,15 +130,26 @@ def _is_route_exists(connection_id):
 
 
 def _pass_message(request_data):
-    connection_id = request_data["connectionId"]
-    corresponding_route = None
-    for route in _routes:
-        if route["connectionId"] == connection_id:
-            corresponding_route = request_data
-    print()
+    source = request_data.host_url  # TODO add http://?
+    request_json = request_data.get_json()
+    corresponding_shared_key = None
+    for shared_key in _shared_keys:
+        if shared_key["source"] == source:
+            corresponding_shared_key = shared_key
+
+    key = corresponding_shared_key["sharedKey"]
+    encrypted_message = request_json["message"]
+    decrypted_message = decrypt_data(encrypted_message, key)
+    destination_uri = decrypted_message["nextDestination"]
+    connection_id = generate_unique_id()
+    message = {"message": decrypted_message, "connectionId": connection_id}
+    response = send_request(destination_uri, message)
+
+    return response
     # TODO the above is wrong,
     #  now the node needs to decrypt a layer but to do that it needs the shared key
     #  which was created in the session before, check where it was saved
+
 
 if __name__ == "__main__":
     main()

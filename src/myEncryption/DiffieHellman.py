@@ -26,10 +26,10 @@ class DiffieHellman:
 
     def generate_shared_key(self, other_public_key):
         # Generate the shared key according to: generator^(thisPrivateKey*otherPrivateKey) mod prime
-        self.shared_key = pow(other_public_key, self._private_key, self.prime)
-
+        shared_key = pow(other_public_key, self._private_key, self.prime)
+        shared_key_bytes = str(shared_key).encode()
         # TODO why is the shared key hashed?
         # return hashlib.sha256(str(self.shared_key)).hexdigest()
 
         # TODO make sure it returns bytes
-        return perform_kdf(self.shared_key)
+        return perform_kdf(shared_key_bytes)
