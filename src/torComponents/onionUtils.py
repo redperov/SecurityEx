@@ -15,7 +15,7 @@ def encrypt_data(data, encryption_key):
     encrypted_data = des.encrypt(data)
     print("Encrypted: %r" % encrypted_data)
 
-    return des, encrypted_data
+    return des, encrypted_data # TODO is there a point in returning des?
 
 
 # TODO if the shared key not needed, remove it from the places that don't use it,
@@ -29,7 +29,7 @@ def decrypt_data(encrypted_data, decryption_key):
 
 
 def generate_unique_id():
-    return uuid.uuid4()
+    return str(uuid.uuid4())
 
 
 def send_request(destination_uri, message):

@@ -20,10 +20,11 @@ app = Flask(__name__)
 
 # # Create a routes list
 # cache.set("routes", [])
-_routes = []
-_shared_keys = []
+# _routes = []
+_shared_routes = {}
 _connection = {}
 _directory_node = {}
+_diffie_hellman = DiffieHellman()
 
 
 def main():
@@ -42,8 +43,12 @@ def main():
     _connection["name"] = current_name
     _connection["hostname"] = current_hostname
     _connection["port"] = current_port
+    _connection["publicKey"] = _diffie_hellman.get_public_key()
+    print(str.format("Received public key: {0}", _connection["publicKey"]))
+
     _directory_node["hostname"] = directory_hostname
     _directory_node["port"] = directory_port
+
     publish_node()
 
     # Run the server
@@ -58,7 +63,7 @@ def publish_node():
     # directory_node = cache.get("directory_node")
     directory_node_uri = str.format("http://{0}:{1}/addNode",
                                     _directory_node["hostname"], _directory_node["port"])
-    print("Publishing node...")
+    print(str.format("Publishing node {0} with public key: {1}", _connection["name"], _connection["publicKey"]))
     # TODO validate the response
     response = requests.post(directory_node_uri, json=_connection).json()
 
@@ -76,23 +81,25 @@ def key_share():
 
     if not _is_valid_key_sharing_request(request_data):
         return jsonify(success=False)
-    diffie_hellman = DiffieHellman()
-    other_public_key = request_data["publicKey"]
+    message = request_data["message"]
+    other_public_key = message["publicKey"]
+    print(str.format("Received public key: {0}", other_public_key))
     # connection_id = request_data["connectionId"]
-    source_uri = request.host_url
+    source_uri = request_data["sourceUri"]
 
     # Get the current node's public key to send to the other side
-    current_public_key = diffie_hellman.get_public_key()
+    # current_public_key = diffie_hellman.get_public_key()
 
     # Create the shared key
-    shared_key = diffie_hellman.generate_shared_key(other_public_key)
+    shared_key = _diffie_hellman.generate_shared_key(other_public_key)
 
     # Create a new route between the request's source and the current node
-    shared_key = {"source": source_uri,  # "keyId": key_id,
+    shared_route = {"source": source_uri,  # "keyId": key_id,
                   "sharedKey": shared_key}
-    _shared_keys.append(shared_key)
+    _shared_routes[source_uri] = shared_route
+    print(str.format("Added shared key with {0}, value: {1}", source_uri, shared_key))
 
-    return {"publicKey": current_public_key}
+    return jsonify(success=True)
 
 
 @app.route("/removeRoute", methods=["POST"])
@@ -106,39 +113,39 @@ def accept_relay():
 
     if not _is_valid_relay_request(request_data):
         return jsonify(success=False)
-    if _is_route_exists(request_data["connectionId"]):
-        response = None  # TODO implement reverse send
+    #shared_route = _shared_routes[request.host_url]  # TODO check if not null
+    if _is_forward_message(request_data):
+        response = _pass_message(request_data)
     else:  # New route creation request
-        response = _pass_message(request)
+        response = None  # TODO implement reverse send
 
     return response
 
 
 def _is_valid_key_sharing_request(request_data):
-    return request_data and ("publicKey" in request_data)
+    return request_data and ("message" in request_data) and ("publicKey" in request_data["message"])
+
+
+def _is_forward_message(request_data):
+    return "response" not in request_data
 
 
 def _is_valid_relay_request(request_data):
     return request_data and ("message" in request_data)
 
 
-def _is_route_exists(connection_id):
-    for route in _routes:
-        if route["connectionId"] == connection_id:
-            return True
-    return False
+# def _is_route_exists(connection_id):
+#     for route in _routes:
+#         if route["connectionId"] == connection_id:
+#             return True
+#     return False
 
 
 def _pass_message(request_data):
-    source = request_data.host_url  # TODO add http://?
-    request_json = request_data.get_json()
-    corresponding_shared_key = None
-    for shared_key in _shared_keys:
-        if shared_key["source"] == source:
-            corresponding_shared_key = shared_key
-
-    key = corresponding_shared_key["sharedKey"]
-    encrypted_message = request_json["message"]
+    source_uri = request_data["sourceUri"]
+    shared_route = _shared_routes[source_uri] # TODO check that it's not None
+    key = shared_route["sharedKey"]
+    encrypted_message = request_data["message"].encode("ISO-8859-1")
     decrypted_message = decrypt_data(encrypted_message, key)
     destination_uri = decrypted_message["nextDestination"]
     connection_id = generate_unique_id()
@@ -146,9 +153,6 @@ def _pass_message(request_data):
     response = send_request(destination_uri, message)
 
     return response
-    # TODO the above is wrong,
-    #  now the node needs to decrypt a layer but to do that it needs the shared key
-    #  which was created in the session before, check where it was saved
 
 
 if __name__ == "__main__":

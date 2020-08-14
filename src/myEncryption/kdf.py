@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.backends import default_backend
 
 backend = default_backend()
-salt = os.urandom(16)
+salt = os.urandom(16) # TODO publish it to the node directory when the node loads, make the proxy node get it from there
 info = b"hkdf-usage"
 KEY_SIZE = 8
 

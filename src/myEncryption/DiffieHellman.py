@@ -27,7 +27,9 @@ class DiffieHellman:
     def generate_shared_key(self, other_public_key):
         # Generate the shared key according to: generator^(thisPrivateKey*otherPrivateKey) mod prime
         shared_key = pow(other_public_key, self._private_key, self.prime)
+        print(str.format("Received shared key before kdf: {0}", shared_key))
         shared_key_bytes = str(shared_key).encode()
+        print(str.format("Received shared key after kdf: {0}", perform_kdf(shared_key_bytes)))
         # TODO why is the shared key hashed?
         # return hashlib.sha256(str(self.shared_key)).hexdigest()
 

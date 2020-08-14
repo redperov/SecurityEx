@@ -15,7 +15,7 @@ app = Flask(__name__)
 #
 # # Create a nodes list
 # cache.set("nodes", [])
-_nodes = []
+_nodes = {}
 
 
 def main():
@@ -36,7 +36,8 @@ def add_node():
 
     # Add the new node to the existing ones
     # nodes = cache.get("nodes")
-    _nodes.append(node)
+    sender_uri = str.format("{0}:{1}", node["hostname"], node["port"])
+    _nodes[sender_uri] = node
     # cache.set("nodes", nodes)
     print(str.format("Added new node: {0}", node))
 
@@ -46,7 +47,7 @@ def add_node():
 @app.route("/getAllNodes", methods=["GET"])
 def get_all_nodes():
     # nodes = cache.get("nodes")
-    return {"nodes": _nodes}
+    return {"nodes": list(_nodes.values())}
 
 
 def _is_valid_node(node):
