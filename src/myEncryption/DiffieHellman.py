@@ -24,14 +24,14 @@ class DiffieHellman:
     def get_public_key(self):
         return self._public_key
 
-    def generate_shared_key(self, other_public_key):
+    def generate_shared_key(self, other_public_key, salt):
         # Generate the shared key according to: generator^(thisPrivateKey*otherPrivateKey) mod prime
         shared_key = pow(other_public_key, self._private_key, self.prime)
         print(str.format("Received shared key before kdf: {0}", shared_key))
         shared_key_bytes = str(shared_key).encode()
-        print(str.format("Received shared key after kdf: {0}", perform_kdf(shared_key_bytes)))
+        print(str.format("Received shared key after kdf: {0}", perform_kdf(shared_key_bytes, salt)))
         # TODO why is the shared key hashed?
         # return hashlib.sha256(str(self.shared_key)).hexdigest()
 
         # TODO make sure it returns bytes
-        return perform_kdf(shared_key_bytes)
+        return perform_kdf(shared_key_bytes, salt)

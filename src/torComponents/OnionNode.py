@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from flask_caching import Cache
 import requests
 import sys
+import os
+import ast
 
 from src.myEncryption.DiffieHellman import DiffieHellman
 
@@ -10,7 +12,7 @@ from src.myEncryption.DiffieHellman import DiffieHellman
 #     "CACHE_TYPE": "simple",  # Flask-Caching related configs
 #     "CACHE_DEFAULT_TIMEOUT": 300
 # }
-from src.torComponents.onionUtils import decrypt_data, generate_unique_id, send_request
+from src.torComponents.onionUtils import decrypt_data, encrypt_data, generate_unique_id, send_request
 
 app = Flask(__name__)
 
@@ -44,6 +46,7 @@ def main():
     _connection["hostname"] = current_hostname
     _connection["port"] = current_port
     _connection["publicKey"] = _diffie_hellman.get_public_key()
+    _connection["salt"] = os.urandom(16).decode("ISO-8859-1")
     print(str.format("Received public key: {0}", _connection["publicKey"]))
 
     _directory_node["hostname"] = directory_hostname
@@ -91,7 +94,7 @@ def key_share():
     # current_public_key = diffie_hellman.get_public_key()
 
     # Create the shared key
-    shared_key = _diffie_hellman.generate_shared_key(other_public_key)
+    shared_key = _diffie_hellman.generate_shared_key(other_public_key, _connection["salt"].encode("ISO-8859-1"))
 
     # Create a new route between the request's source and the current node
     shared_route = {"source": source_uri,  # "keyId": key_id,
@@ -146,13 +149,23 @@ def _pass_message(request_data):
     shared_route = _shared_routes[source_uri] # TODO check that it's not None
     key = shared_route["sharedKey"]
     encrypted_message = request_data["message"].encode("ISO-8859-1")
-    decrypted_message = decrypt_data(encrypted_message, key)
-    destination_uri = decrypted_message["nextDestination"]
-    connection_id = generate_unique_id()
-    message = {"message": decrypted_message, "connectionId": connection_id}
-    response = send_request(destination_uri, message)
+    decrypted_message_bytes = decrypt_data(encrypted_message, key)
+    decrypted_message_json = ast.literal_eval(decrypted_message_bytes.decode('utf-8')) # TODO should it be changed to ISO? seems to work without it
+    destination_uri = decrypted_message_json["nextDestination"]
 
-    return response
+    try:
+        message = decrypted_message_json["message"].decode("ISO-8859-1")
+    except (UnicodeDecodeError, AttributeError):
+        message = decrypted_message_json["message"]
+    connection_id = generate_unique_id()
+    source_uri = str.format("{0}:{1}", _connection["hostname"], _connection["port"])
+    message = {"message": message, "connectionId": connection_id, "sourceUri": source_uri}
+    response = send_request(destination_uri, message)
+    response_bytes = str(response).encode("ISO-8859-1")
+    # TODO convert response to bytes?
+    _, encrypted_response_bytes = encrypt_data(response_bytes, key) # TODO add encryption
+    encrypted_response_json = {"message": encrypted_response_bytes.decode("ISO-8859-1")}
+    return encrypted_response_json
 
 
 if __name__ == "__main__":

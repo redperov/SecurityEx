@@ -3,26 +3,26 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.backends import default_backend
 
-backend = default_backend()
-salt = os.urandom(16) # TODO publish it to the node directory when the node loads, make the proxy node get it from there
-info = b"hkdf-usage"
+BACKEND = default_backend()
+# salt = os.urandom(16)
+INFO = b"hkdf-usage"
 KEY_SIZE = 8
 
 
-def perform_kdf(input_key):
+def perform_kdf(input_key, salt):
     """
     Perform key derivation on the given key to transform it to the desired length.
     Uses HKDF.
     :param input_key: key to transform (in bytes)
-    :param desired_length: desired output key length
+    :param salt: salt for key randomization
     :return: derived key
     """
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=KEY_SIZE,
         salt=salt,
-        info=info,
-        backend=backend)
+        info=INFO,
+        backend=BACKEND)
     derived_key = hkdf.derive(input_key)
 
     return derived_key

@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import requests
 import sys
 import random
+import ast
 
 from src.myEncryption.DiffieHellman import DiffieHellman
 from src.torComponents.onionUtils import encrypt_data, decrypt_data, send_request, generate_unique_id
@@ -40,15 +41,17 @@ def hide_request():
     if not _is_valid_args(args):
         return jsonify(success=False)
     destination_uri = args["req"]
+    destination_message = args["msg"]
     path = _choose_path(NUM_OF_NODES_IN_PATH)
     _create_shared_keys(path)
-    onion_message = _create_onion(path, destination_uri, "hello")  # TODO change that to user argument
-    response = _send_hidden_request(onion_message)
+    onion_message = _create_onion(path, destination_uri, destination_message)  # TODO change that to user argument
+    onion_response = _send_hidden_request(onion_message)
+    response = decrypt_response(onion_response, path)
     return response
 
 
 def _is_valid_args(args):
-    return args and args["req"]
+    return args and "req" in args and "msg" in args
 
 
 def _choose_path(path_length):
@@ -83,8 +86,9 @@ def _create_shared_keys(nodes):
         source_public_key = diffie_hellman.get_public_key()
         print(str.format("Generated public key: {0}", source_public_key))
         other_public_key = node["publicKey"]
+        other_salt = node["salt"].encode("ISO-8859-1")
         print(str.format("Other public key: {0}", other_public_key))
-        shared_key = diffie_hellman.generate_shared_key(other_public_key)
+        shared_key = diffie_hellman.generate_shared_key(other_public_key, other_salt)
         print(str.format("Created shared key with {0}, value: {1}", node["name"], shared_key))
 
         _send_public_key(source_public_key, nodes_before_key_exhange, node)
@@ -100,9 +104,10 @@ def _send_public_key(source_public_key, nodes_before_key_exchange, destination_n
     node_uri = str.format("http://{0}:{1}/keyShare", destination_node["hostname"], destination_node["port"])
     message = {"publicKey": source_public_key}
     onion = _create_onion(nodes_before_key_exchange, node_uri, message)
-    response = _send_hidden_request(onion)
+    onion_response = _send_hidden_request(onion)
+    decrypted_response = decrypt_response(onion_response, nodes_before_key_exchange)
 
-    if "success" in response and response["success"]:
+    if "success" in decrypted_response and decrypted_response["success"]:
         print(str.format("Successfully send public key to {0}", destination_node["name"]))
     else:
         print(str.format("Failed sending public key to {0}", destination_node["name"]))
@@ -159,6 +164,18 @@ def _send_hidden_request(onion_message):
 
     return response
 
+
+def decrypt_response(onion_response, path):
+    current_onion = onion_response
+
+    for node in path:
+        shared_key = node["sharedKey"]
+        encrypted_message = current_onion["message"]
+        encrypted_message_bytes = str(encrypted_message).encode("ISO-8859-1")  # TODO change to iso?
+        decrypted_message_bytes = decrypt_data(encrypted_message_bytes, shared_key)
+        current_onion = ast.literal_eval(decrypted_message_bytes.decode('ISO-8859-1'))
+
+    return current_onion
 
 if __name__ == "__main__":
     main()
