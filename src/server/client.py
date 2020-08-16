@@ -10,6 +10,10 @@ _uri_input = Entry(root, width=50, borderwidth=1)
 _window_settings = {}
 _proxy_node = {}
 
+# TODO fix border span
+# TODO allow asynchronous wait with a disabled send button click
+# TODO check about closing the form
+# TODO add direct fast request (optional)
 
 def main():
     if len(sys.argv) != 3:
@@ -124,7 +128,7 @@ def _display_titles(titles_record, current_row):
     current_column = 0
 
     for key in keys:
-        key_label = Label(root, text=key)
+        key_label = Label(root, text=key, borderwidth=2, relief="groove", font='Helvetica 10 bold')
         key_label.grid(row=current_row, column=current_column, padx=5, pady=3)
         current_column += 1
 
@@ -134,7 +138,7 @@ def _add_table_row(record, current_row):
     current_column = 0
 
     for key in keys:
-        value_label = Label(root, text=record[key])
+        value_label = Label(root, text=record[key], borderwidth=2, relief="groove")
         value_label.grid(row=current_row, column=current_column, padx=5, pady=3)
         current_column += 1
 
