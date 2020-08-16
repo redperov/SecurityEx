@@ -19,8 +19,9 @@ def reply():
     # Check if the request is valid
     if not _is_valid_message(request_data):
         return jsonify(success=False)
+    print(str.format("Received request {0}", request))
     message = request_data["message"]
-    reply = message.upper()
+    reply = [{"name": "John", "age": 30, "salary": 3000}, {"name": "Jack", "age": 45, "salary": 6000}]
 
     return {"message": reply}
 
