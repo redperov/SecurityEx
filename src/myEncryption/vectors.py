@@ -1,5 +1,5 @@
 """
-Vectors which are used throughout the DES algorithm
+Vectors which are used throughout the DES algorithm.
 """
 
 # Permutation and translation tables for DES

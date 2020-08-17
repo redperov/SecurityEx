@@ -4,7 +4,6 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.backends import default_backend
 
 BACKEND = default_backend()
-# salt = os.urandom(16)
 INFO = b"hkdf-usage"
 KEY_SIZE = 8
 

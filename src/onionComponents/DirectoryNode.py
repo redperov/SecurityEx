@@ -1,20 +1,14 @@
 from flask import Flask, request, jsonify
 import sys
-from flask_caching import Cache
 
-# config = {
-#     "DEBUG": True,  # some Flask specific configs
-#     "CACHE_TYPE": "simple",  # Flask-Caching related configs
-#     "CACHE_DEFAULT_TIMEOUT": 300
-# }
+"""
+An implementation of a directory node. 
+Its purpose is to keep records of the nodes in the system.
+"""
+
 app = Flask(__name__)
 
-# # Tell Flask to use the above defined config
-# app.config.from_mapping(config)
-# cache = Cache(app)
-#
-# # Create a nodes list
-# cache.set("nodes", [])
+# Nodes in the system
 _nodes = {}
 
 
@@ -28,6 +22,9 @@ def main():
 
 @app.route("/addNode", methods=["POST"])
 def add_node():
+    """
+    Adds a new node to the directory.
+    """
     node = request.get_json()
 
     # Check if the request contains a valid node
@@ -35,10 +32,8 @@ def add_node():
         return jsonify(success=False)
 
     # Add the new node to the existing ones
-    # nodes = cache.get("nodes")
     sender_uri = str.format("{0}:{1}", node["hostname"], node["port"])
     _nodes[sender_uri] = node
-    # cache.set("nodes", nodes)
     print(str.format("Added new node: {0}", node))
 
     return jsonify(success=True)
@@ -46,11 +41,19 @@ def add_node():
 
 @app.route("/getAllNodes", methods=["GET"])
 def get_all_nodes():
-    # nodes = cache.get("nodes")
+    """
+    Retrieves all the nodes in the directory.
+    :return:
+    """
     return {"nodes": list(_nodes.values())}
 
 
 def _is_valid_node(node):
+    """
+    Checks if the given node is valid.
+    :param node: node to check
+    :return: is the node valid
+    """
     return node and ("name" in node) and ("hostname" in node) and ("port" in node)
 
 

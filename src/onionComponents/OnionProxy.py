@@ -5,11 +5,23 @@ import random
 import ast
 
 from src.myEncryption.DiffieHellman import DiffieHellman
-from src.torComponents.onionUtils import encrypt_data, decrypt_data, send_request, generate_unique_id
+from src.onionComponents.onionUtils import encrypt_data, decrypt_data, send_request, generate_unique_id
+
+"""
+An implementation of an onion proxy.
+Its purpose is to receive a request from a user and to send it to its destination in an anonymous way,
+using an onion routing protocol.
+"""
 
 app = Flask(__name__)
+
+# Connection configurations
 _connection = {}
+
+# Directory node configurations
 _directory_node = {}
+
+# Constants
 NUM_OF_NODES_IN_PATH = 3
 MINIMUM_NODES_IN_PATH = 3
 
@@ -22,10 +34,7 @@ def main():
     directory_hostname = sys.argv[3]
     directory_port = sys.argv[4]
 
-    # # Save the connection parameters
-    # cache.set("connection", {"name": current_name, "hostname": current_hostname, "port": current_port})
-    # cache.set("directory_node", {"hostname": directory_hostname, "port": directory_port})
-
+    # Save the configurations
     _connection["hostname"] = current_hostname
     _connection["port"] = current_port
     _directory_node["hostname"] = directory_hostname
@@ -37,36 +46,62 @@ def main():
 
 @app.route("/", methods=["GET"])
 def hide_request():
+    """
+    Encrypts the given request in multiple layers of encryption and sends the resulted onion throughout the system.
+    """
     args = request.args
+
+    # Check if the request is valid
     if not _is_valid_args(args):
         return jsonify(success=False)
     destination_uri = args["req"]
     destination_message = args["msg"]
+
+    # Choose a path of nodes through which the message will be sent
     path = _choose_path(NUM_OF_NODES_IN_PATH)
+
+    # Create shared keys between the chosen nodes
     _create_shared_keys(path)
-    onion_message = _create_onion(path, destination_uri, destination_message)  # TODO change that to user argument
+
+    # Encrypt the message in multiple layers
+    onion_message = _create_onion(path, destination_uri, destination_message)
+
+    # Send the encrypted message through the path
     onion_response = _send_hidden_request(onion_message)
+
+    # Decrypt the response
     response = decrypt_response(onion_response, path)
     return response
 
 
 def _is_valid_args(args):
+    """
+    Checks if the given arguments are valid.
+    :param args: arguments to check
+    :return: are the arguments valid
+    """
     return args and "req" in args and "msg" in args
 
 
 def _choose_path(path_length):
+    """
+    Chooses a path on nodes.
+    :param path_length: desired path length
+    :return:
+    """
     directory_node_uri = str.format("http://{0}:{1}/getAllNodes",
                                     _directory_node["hostname"], _directory_node["port"])
-    # TODO validate the response
     response = requests.get(directory_node_uri).json()
     nodes = response["nodes"]
 
+    # Validate the path length
     if len(nodes) < path_length:
         raise ValueError("Path size is larger than the number of available nodes")
     if len(nodes) < MINIMUM_NODES_IN_PATH:
         raise ValueError(str.format("The path must consist of at least {0} nodes", MINIMUM_NODES_IN_PATH))
     chosen_path = []
 
+    # Choose random nodes from all the available nodes
     for i in range(path_length):
         chosen_node = random.choice(nodes)
         chosen_path.append(chosen_node)
@@ -77,11 +112,14 @@ def _choose_path(path_length):
 
 
 def _create_shared_keys(nodes):
+    """
+    Creates shared keys between the current server and the given nodes.
+    :param nodes: nodes to share keys with
+    """
     print("Performing key sharing...")
     nodes_before_key_exhange = []
 
     for node in nodes:
-        # TODO maybe exchange the prime and modulus in the beginning to make it look real?
         diffie_hellman = DiffieHellman()
         source_public_key = diffie_hellman.get_public_key()
         print(str.format("Generated public key: {0}", source_public_key))
@@ -91,8 +129,10 @@ def _create_shared_keys(nodes):
         shared_key = diffie_hellman.generate_shared_key(other_public_key, other_salt)
         print(str.format("Created shared key with {0}, value: {1}", node["name"], shared_key))
 
+        # Send the current server's public key to the other node
         _send_public_key(source_public_key, nodes_before_key_exhange, node)
-        # node["encryptionAlgorithm"] = encryption_algorithm
+
+        # Save the shared key
         node["sharedKey"] = shared_key
         nodes_before_key_exhange.append(node)
     print("Finished key sharing")
@@ -101,57 +141,52 @@ def _create_shared_keys(nodes):
 
 
 def _send_public_key(source_public_key, nodes_before_key_exchange, destination_node):
+    """
+    Sends the given public key to the desired node
+    :param source_public_key: public key to send
+    :param nodes_before_key_exchange: nodes preceding the desired destination node
+    :param destination_node: destination node to send public key to
+    """
     node_uri = str.format("http://{0}:{1}/keyShare", destination_node["hostname"], destination_node["port"])
     message = {"publicKey": source_public_key}
     onion = _create_onion(nodes_before_key_exchange, node_uri, message)
     onion_response = _send_hidden_request(onion)
     decrypted_response = decrypt_response(onion_response, nodes_before_key_exchange)
 
+    # Check if the key was sent successfully
     if "success" in decrypted_response and decrypted_response["success"]:
         print(str.format("Successfully send public key to {0}", destination_node["name"]))
     else:
         print(str.format("Failed sending public key to {0}", destination_node["name"]))
 
-    # json_data = {"source": {"hostname": source["hostname"], "port": source["port"]},
-    #              "destination": ""}  # TODO NEXT_NODE_IN_PATH
-    # json_data = {"publicKey": source_public_key}
-    # response = requests.post(node_uri, json=json_data).json()
-    #
-    # # TODO maybe return None instead?
-    # if not ("publicKey" in response):
-    #     raise ValueError("Key sharing failure")
-    # other_public_key = response["publicKey"]
-    # shared_key = diffie_hellman.generate_shared_key(other_public_key)
-    #
-    # return shared_key
-
 
 def _create_onion(path, final_destination, message):
+    """
+    Encrypt the given message with multiple layers of encryption.
+    :param path: path thorough which the encrypted message will be sent
+    :param final_destination: the destination of the encrypted message
+    :param message: message to send
+    """
     current_onion = {"message": message, "nextDestination": final_destination}
 
     for i in range(len(path)):
         next_node = path[-(i + 1)]
         next_destination = str.format("http://{0}:{1}/relay", next_node["hostname"], next_node["port"])
         shared_key = next_node["sharedKey"]
-        current_onion_bytes = str(current_onion).encode("ISO-8859-1") # TODO change to iso?
+        current_onion_bytes = str(current_onion).encode("ISO-8859-1") 
         layer_algorithm, encrypted_layer = encrypt_data(current_onion_bytes, shared_key)
         next_node["encryptionAlgorithm"] = layer_algorithm
         current_onion = {"message": encrypted_layer, "nextDestination": next_destination}
-
-    # TODO go in reverse, and add the final message to the final node and go back to create a raw onion
-    # TODO go in noraml order and encrypt the previous raw onion
-    # Encrypt the message according to the length of the path
-    # for node in path:
-    #     # Adds a layer to the onion
-    #     onion_message = {"message": onion, "nextDestination": destination}
-    #     onion = encrypt_data(message, node["shared_key"])
-    #
-    # return onion
 
     return current_onion
 
 
 def _send_hidden_request(onion_message):
+    """
+    Sends the given encrypted message to the first node in the path
+    :param onion_message:
+    :return:
+    """
     try:
         message = onion_message["message"].decode("ISO-8859-1")
     except (UnicodeDecodeError, AttributeError):
@@ -166,6 +201,11 @@ def _send_hidden_request(onion_message):
 
 
 def decrypt_response(onion_response, path):
+    """
+    Decrypts the given response
+    :param onion_response: response to decrypt
+    :param path: path through which the respond traveled
+    """
     current_onion = onion_response
 
     for node in path:
@@ -176,6 +216,7 @@ def decrypt_response(onion_response, path):
         current_onion = ast.literal_eval(decrypted_message_bytes.decode('ISO-8859-1'))
 
     return current_onion
+
 
 if __name__ == "__main__":
     main()
